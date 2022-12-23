@@ -1,0 +1,279 @@
+---
+title: "An Analysis on the Relationship between Income, Education Level and Capital Gain"
+author: "Roman Shrestha"
+date: "December 9, 2022"
+format: 
+  revealjs:
+    embed-resources: true
+    theme: "sky" 
+    smaller: true
+    scrollable: true
+    transition: slide
+---
+
+## An Analysis on the Relationship between Income, Education Level and Capital Gain      
+```{r, echo=FALSE, message=FALSE, warning = FALSE}
+#| label: load-packages
+library(tidyverse) #loads packages
+library(ggforce)
+library(ggridges)
+library(readr)
+library(readxl)
+library(tidymodels)
+library(glmnet)
+```
+
+```{r, echo=FALSE, warning = FALSE}
+#| label: load-data
+df <- read_csv("data/adultdata.csv", show_col_types = FALSE) #loads csv file
+```
+
+```{r, echo=FALSE, warning = FALSE}
+#| label: change-colnames
+colnames(df) <- c("age", "workclass", "fnlwgt", "education", "education_num", "marital_status", "occupation", "relationship", "race", "sex", "capital_gain", "capital_loss", "hours_per_week", "native_country", "income") #rename columns
+```
+
+```{r, echo=FALSE, warning = FALSE}
+#| label: recategorize-education
+df <- df %>%
+  mutate(education = case_when( #
+    education %in% c("Preschool", "1st-4th", "5th-6th", "7th-8th") ~ "some_primary_middle_school",
+    education %in% c("9th", "10th", "11th", "12th") ~ "some-hs-school",
+    education %in% c("Assoc-acdm", "Assoc-voc") ~ "associate",
+    education == "HS-grad" ~ "high-school-grad",
+    education == "Some-college" ~ "some-college",
+    education == "Bachelors" ~ "bachelors",
+    education == "Masters" ~ "masters",
+    education == "Doctorate" ~ "doctorate",
+    education == "Prof-school" ~ "prof-school"
+    )
+    ) #recateogrizes education variable
+```
+
+```{r, echo=FALSE, warning = FALSE}
+#| label: factor-education
+edu_fct <- c("some_primary_middle_school", "some-hs-school", "high-school-grad", "some-college","associate", "bachelors", "masters", "prof-school", "doctorate")
+df <- df %>%
+mutate(education = factor(education, levels = edu_fct)) #creates factor levels for education variable
+```
+
+```{r, echo=FALSE, warning = FALSE}
+#| label: create-bin-var
+df <- df %>%
+  mutate(income_bin = if_else(income==">50K", 1, 0)) #creates a binary income variable
+```
+
+```{r, echo=FALSE, warning = FALSE}
+#| label: factor-income
+df <- df %>%
+mutate(income = factor(income, levels = c("<=50K", ">50K"))) #creates factor for income variable
+```
+
+```{r, echo=FALSE, warning = FALSE}
+#| label: relevel-variables
+df <- df %>%
+  mutate(marital_status = fct_relevel(marital_status, "Never-married"),
+         race = fct_relevel(race, "White"),
+         sex = fct_relevel(sex, "Male"),
+         native_country = fct_relevel(native_country, "United-States") #relevels variables
+         )
+```
+
+```{r, echo=FALSE, warning = FALSE}
+#| label: linear-reg-1
+#we include the linear model on top to plot our residual plot in the EDA section
+lin_fit <- linear_reg() %>% #specifies linear model  
+  set_engine("lm") %>% #lm: linear model
+  fit(income_bin~capital_gain + education + education_num + marital_status + race + sex + native_country, data = df)  #fits model and estimates parameters
+```
+
+**Motivation**
+
+In September 2019, the Census Bureau reported that income inequality in the United States had reached its highest level in 50 years.
+
+
+**Research Question**
+
+Is there a relationship between a person’s income and their educational background, and capital gain in the United States?
+
+
+**Hypothesis**
+
+As the education level and capital gain of a person increases, their income will also increase.
+
+
+## Introduction to Data
+
+The dataset we use was extracted by Barry Becker from the 1994 US Census Bureau’s database and was later donated to the Machine Learning Repository of University of California, Irvine Census Income Data Set. 
+
+- 32561 data set instances
+
+- 15 attributes, includes variables like a person's education level, race, capital gain 
+
+- mix of continuous and discrete data
+
+- key explanatory variables: education, num_education and capital gain
+
+- outcome variable: income
+
+- control variables: marital status, occupation, race, and sex
+ 
+```{r, echo=FALSE, warning = FALSE}
+#| label: df-head
+head(df)  
+```
+
+
+## Exploratory Data Analysis: Plots
+
+::::{.columns}
+
+:::{.column width=50%}
+**Histogram of Education and Income**
+
+```{r, warning=FALSE, echo=FALSE, message=FALSE}
+#| label: education-income-hist-plot
+df %>%
+  ggplot(aes(x = education_num, fill = income)) + #maps the plot
+  geom_histogram(alpha = 0.8, position = "fill", bins = 32) + #creates density plot
+  labs(x = "Education years",
+    y = NULL,
+    fill = "Income",
+    title = "Figure 1: Education years vs Income level") +#labels the plot
+ theme_minimal()
+```
+
+**Bar plot of Education and Income**
+```{r, echo=FALSE, warning = FALSE}
+#| label: education-income-bar-plot
+ggplot(df, aes(x = education,
+               fill = income)) + #maps axes
+  geom_bar(position = "fill") + 
+  labs(x = "Education Level", y = NULL, fill = "Income" , title = "Figure 3: Proportions for Income Level by Education Level") + #labels the plot
+   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+:::
+
+:::{.column width=50%}
+**Density plot of Capital gain vs Income**
+
+```{r, echo=FALSE, warning = FALSE}
+#| label: capitalgain-income-density-plot
+df %>%
+  filter(capital_gain<17000) %>% #filters for outliers
+  ggplot(aes(x = capital_gain, fill = income)) + #maps the plot
+  geom_density(alpha = 0.6) + #plots density plot
+  labs(x = "Capital gain",
+    y = NULL,
+    fill = "Income",
+    title = "Figure 2: Capital gain vs Income level") +#labels the plot
+  theme_minimal()
+```
+
+**Residual plot**
+
+```{r, echo=FALSE, warning = FALSE}
+#| label: res-plot
+#plots the residual plot
+lin_fit_aug <- augment(lin_fit$fit) 
+ggplot(lin_fit_aug, mapping = aes(x = .fitted, y = .resid)) +
+  geom_point(alpha = 0.5) +
+  geom_hline(yintercept = 0, color = "gray", lty = "dashed") +
+  labs(x = "Predicted income", y = "Residuals")
+```
+:::
+
+::::
+
+## Exploratory Data Analysis: Statistics 
+
+**Summary statistics**
+
+```{r, warning=FALSE, message=FALSE,echo=FALSE}
+#| label: summarize-variables
+df %>%
+  group_by(education, income) %>% #groups by education and income 
+  summarise(mean(education_num), median(education_num, na.rm = TRUE), sd(education_num), mean(capital_gain, na.rm = TRUE), sd(capital_gain, na.rm = TRUE))  %>%#summarizes data
+knitr::kable(digits = 3, caption = "Table 2",col.names = c("Education", "Income Group", "Mean of Education Years", "Median of Education Years", "SD of Education Years", "Mean of Capital Gain", "SD of Capital Gain")) #creates nice looking table
+```
+
+
+## Linear Model and Hypothesis Testing
+
+::::{.columns}
+
+:::{.column width=50%}
+**Linear Model**
+
+- Every dollar increase in capital gain increases probability of higher income
+
+- Every education level increase increases the  probability of higher income
+
+- The slope for all of our explanatory variables are positive, there seems to be a positive linear correlation between our explanatory variables and outcome variables. 
+
+- However, on plotting the residual plot, we find out that the relationship between our variables is not linear.
+
+- There could be a better model other than the linear regression model to explain the relationship.
+
+```{r, echo=FALSE, warning = FALSE}
+#| label: linear-reg
+lin_fit <- linear_reg() %>% #specifies linear model  
+  set_engine("lm") %>% #lm: linear model
+  fit(income_bin~capital_gain + education + education_num + marital_status + race + sex + native_country, data = df)  #fits model and estimates parameters
+
+lin_fit_tid <- tidy(lin_fit) #tidies df
+knitr::kable(head(lin_fit_tid, n = 11),caption = "Table 3",
+  col.names = c("Term", "Estimate", "Std Error", "Statistic", "P Value")
+             ) 
+```
+:::
+
+:::{.column width=50%}
+**Hypothesis Testing**
+
+- Null hypothesis: there is no association between income and education
+
+- Alternative hypothesis: there is an association between income and education
+
+- Chi-squared Test for our hypothesis testing 
+
+- Chi-squared value is 4427 and p value was negligible
+
+- We reject the null hypothesis
+
+- There is an association between income and education level
+
+```{r, echo = FALSE, warning = FALSE}
+#| label: hypothesis testing
+#plots the theoretical chi-square null distribution
+observedC <- df %>%
+specify(income ~ education) %>%
+hypothesize(null = "independence") %>%
+calculate(stat = "Chisq")
+observedC$stat[1]
+
+null_dist <- df %>%
+specify(income ~ education) %>%
+assume(distribution = "Chisq")
+
+null_dist %>%
+visualize() +
+shade_p_value(observedC, direction = "greater")
+```
+
+:::
+
+::::
+
+## Conclusion and Discussion
+
+- Our statistical analysis verified the hypothesis that as the education level and capital gain of a person increases, their income will also increase. 
+
+- The results produced from linear regression, hypothesis testing, and EDA suggest a general relationship between our observed variables, and even more so a positive predictive relationship. 
+
+- This research only provides a glimpse into the factors that influence a person’s income from two decades ago, and does not necessarily apply to present time.
+
+- We recognize that  we do not have the coding experience in order to properly compute non-linear models we need, as referenced previously on regression analysis. 
+
+- We encourage future research on factors that influence a person’s (in)accessibility to education, since our result shows that education is a key indicator of income. 
