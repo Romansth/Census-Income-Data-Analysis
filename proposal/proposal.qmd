@@ -1,0 +1,85 @@
+---
+title: "Proposal: Relationship between Income, Education Level and Capital Gain"
+format: html
+editor: visual
+author: "Roman Shrestha"
+date: "October 12, 2022"
+---
+
+# **Introduction and Data**
+
+This data set was obtained from the Machine Learning Repository of University of California, Irvine Census Income Data Set who referenced the US census bureau's database as the original source of data. It consists of 51 state samples, each with a different probability of selection. There are 32560 data set instances, with a mix of continuous and discrete data. The data set contains 15 attributes, which include a person's education level, race, capital gain and other relevant information. 
+
+# **Research Question**
+
+This research seeks to investigate the relationship between a person's income and their educational background, and capital gain. Our hypothesis is that as the education level and capital gain of a person increases, their income will also increase.
+
+# **Exploratory Data Analysis**
+
+#### What is your outcome variable(s)? How well does it measure the outcome you are interested in? How does it relate to your hypotheses? Is it numeric continuous or discrete? Or categorical ordinal?
+
+Our outcome variable is income. It is a categorical ordinal variable. It tells us whether the person earns more or less than \$50,000 per year. It can be a general way to measure our outcome because it just gives us a range of income the person earns in a year rather than an exact numerical value. It relates to our hypothesis because it helps us understand how education and capital gain relates to the range of income a person earns annually, i.e if higher education and higher capital gain leads to being in a high income category or vice versa.
+
+#### What are your key explanatory variables? Are they numeric continuous or discrete or categorical ordinal or nominal?
+
+Our key explanatory variables are capital gain and education level. Capital gain is a numerical discrete variable and education level is a categorical ordinal variable. Education level tells us what level of education the person was able to finish and capital gain tells us how much profit a person earned on the sale of an asset which has increased in value over the holding period. (An asset may include tangible property, a car, a business, or intangible property such as shares.)
+
+```{r load-package, echo = FALSE}
+#| message: false
+#| warning: false
+library(tidyverse) #loads packages
+library(ggforce)
+library(ggridges)
+library(readr)
+library(readxl) 
+```
+
+```{r, echo = FALSE}
+#| label: load-data
+df <- read_csv("data/adultdata.csv", show_col_types = FALSE) #loads csv file
+```
+
+```{r, echo = FALSE}
+#| label: change-colnames
+colnames(df) <- c("age", "workclass", "fnlwgt", "education", "education_num", "marital_status", "occupation", "relationship", "race", "sex", "capital_gain", "capital_loss", "hours_per_week", "native_country", "income") #rename columns
+
+```
+
+## Data Visualization
+
+```{r, echo = FALSE}
+#| label: barplot
+ggplot(df, aes(x = education,
+               fill = income)) + #maps axes
+  geom_bar() + scale_fill_viridis_d(na.value = "grey50") + #plots bar plot
+  labs(   #labels the plot
+    x = "Education",
+    y = "Count",
+    fill = "Income",
+    title = "Income vs Education",
+  ) +
+   theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r, echo = FALSE}
+#| label: ridgeplot
+df %>%
+ggplot(aes(x = capital_gain, y = income, fill = income, color = income)) + #maps axes
+  geom_density_ridges(alpha = 0.5) + #plots ridge plot
+  labs( #labels the plot
+    x = "Capital gain",
+    y = "Income",
+    color = "Income",
+    fill = "Income",
+    title = "Income vs Capital Gain",
+  ) +
+  theme_minimal() + 
+  scale_color_viridis_d(na.value = "grey50")
+```
+
+## Dataframe Glimpse
+
+```{r, echo = FALSE}
+glimpse(df) #glimpse data
+```
